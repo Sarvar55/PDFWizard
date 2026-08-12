@@ -1,0 +1,106 @@
+name: pdf-wizard
+
+services:
+  postgres:
+    image: postgres:17.10-alpine
+    restart: unless-stopped
+    env_file:
+      - .env
+    secrets:
+      - postgres_password
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2025-04-22T22-12-26Z
+    restart: unless-stopped
+    env_file:
+      - .env
+    secrets:
+      - minio_root_password
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        export MINIO_ROOT_PASSWORD="$$(cat /run/secrets/minio_root_password)"
+        exec minio server /data --console-address ":9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio-data:/data
+
+  minio-init:
+    image: minio/mc:latest
+    restart: "no"
+    depends_on:
+      - minio
+    env_file:
+      - .env
+    secrets:
+      - minio_root_password
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        MINIO_PASSWORD="$$(cat /run/secrets/minio_root_password)"
+        until mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_PASSWORD}"; do
+          sleep 2
+        done
+        mc mb --ignore-existing "local/$${MINIO_BUCKET}"
+
+  mailpit:
+    image: axllent/mailpit:v1.27.4
+    restart: unless-stopped
+    env_file:
+      - .env
+    secrets:
+      - source: postgres_password
+        target: spring.datasource.password
+      - source: minio_root_password
+        target: pdf-wizard.storage.minio.secret-key
+    ports:
+      - "1026:1025"
+      - "8026:8025"
+    volumes:
+      - mailpit-data:/data
+
+  app:
+    profiles:
+      - app
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    ports:
+      - "8081:8080"
+
+volumes:
+  postgres-data:
+  minio-data:
+  mailpit-data:
+
+secrets:
+  postgres_password:
+    file: ./secrets/postgres_password.txt
+  minio_root_password:
+    file: ./secrets/minio_root_password.txt

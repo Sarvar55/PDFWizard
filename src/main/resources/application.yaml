@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: pdf-wizard
+
+  config:
+    import: optional:configtree:/run/secrets/
+
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5435/pdfwizard}
+    username: ${SPRING_DATASOURCE_USERNAME:pdfwizard}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  mail:
+    host: ${SPRING_MAIL_HOST:localhost}
+    port: ${SPRING_MAIL_PORT:1026}
+    properties:
+      mail:
+        smtp:
+          auth: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:false}
+
+pdf-wizard:
+  mail:
+    from: ${PDF_WIZARD_MAIL_FROM:no-reply@pdfwizard.local}
+  storage:
+    minio:
+      endpoint: ${PDF_WIZARD_STORAGE_MINIO_ENDPOINT:http://localhost:9000}
+      access-key: ${PDF_WIZARD_STORAGE_MINIO_ACCESS_KEY:pdfwizard}
+      secret-key: ${PDF_WIZARD_STORAGE_MINIO_SECRET_KEY:}
+      bucket: ${PDF_WIZARD_STORAGE_MINIO_BUCKET:pdf-documents}
+
+server:
+  port: ${SERVER_PORT:8080}
