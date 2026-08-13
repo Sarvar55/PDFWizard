@@ -16,9 +16,13 @@ public record ApiErrorResponse(
         return new ApiErrorResponse(
                 exception.getCode(),
                 exception.getMessage(),
-                Map.copyOf(exception.getValidationErrors()),
-                Map.copyOf(exception.getDetails()),
+                copyOrNull(exception.getValidationErrors()),
+                copyOrNull(exception.getDetails()),
                 Instant.now());
+    }
+
+    private static <K, V> Map<K, V> copyOrNull(Map<K, V> values) {
+        return values == null ? null : Map.copyOf(values);
     }
 
 }
