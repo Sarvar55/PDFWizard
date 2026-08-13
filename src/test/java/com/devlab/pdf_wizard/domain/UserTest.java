@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import com.devlab.pdf_wizard.domain.exception.ValidationException;
 import com.devlab.pdf_wizard.domain.model.Email;
-import com.devlab.pdf_wizard.domain.model.PasswordHash;
+import com.devlab.pdf_wizard.domain.model.Password;
 import com.devlab.pdf_wizard.domain.model.Role;
 import com.devlab.pdf_wizard.domain.model.User;
 
@@ -17,7 +17,7 @@ class UserTest {
     void shouldRegisterEnabledUser() {
         User user = User.register(
                 Email.of("  User@Example.COM "),
-                PasswordHash.of("stored-password-hash"));
+                Password.fromHashed("stored-password-hash"));
 
         assertThat(user.getId()).isNotNull();
         assertThat(user.getEmail()).isEqualTo(Email.of("user@example.com"));
@@ -33,7 +33,7 @@ class UserTest {
 
     @Test
     void shouldNeverExposePasswordValuesThroughToString() {
-        assertThat(PasswordHash.of("stored-password-hash").toString())
-                .isEqualTo("[PROTECTED]");
+        assertThat(Password.fromHashed("stored-password-hash").toString())
+                .isEqualTo("Password[PROTECTED]");
     }
 }

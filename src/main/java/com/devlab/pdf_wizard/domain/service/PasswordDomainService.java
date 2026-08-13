@@ -1,11 +1,8 @@
 package com.devlab.pdf_wizard.domain.service;
 
-import com.devlab.pdf_wizard.domain.model.Password;
-import com.devlab.pdf_wizard.domain.model.PasswordHash;
-
 public interface PasswordDomainService {
 
-    PasswordHash hash(Password password);
+    String hash(String plainPassword);
 
-    boolean matches(Password password, PasswordHash passwordHash);
+    boolean matches(String rawPassword, String encodedPassword);
 }

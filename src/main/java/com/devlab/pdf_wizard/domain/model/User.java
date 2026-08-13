@@ -11,50 +11,50 @@ public class User {
 
     private final UUID id;
     private final Email email;
-    private PasswordHash passwordHash;
+    private Password password;
     private final Role role;
     private boolean enabled;
     private final Instant createdAt;
     private Instant updatedAt;
 
-    private User(UUID id, Email email, PasswordHash passwordHash, Role role,
+    private User(UUID id, Email email, Password password, Role role,
             boolean enabled, Instant createdAt, Instant updatedAt) {
         this.id = id;
         this.email = email;
-        this.passwordHash = passwordHash;
+        this.password = password;
         this.role = role;
         this.enabled = enabled;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
     }
 
-    public static User register(Email email, PasswordHash passwordHash) {
+    public static User register(Email email, Password password) {
         Instant now = Instant.now();
 
         return new User(
                 UUID.randomUUID(),
                 validateEmail(email),
-                validatePasswordHash(passwordHash),
+                validatePassword(password),
                 Role.USER,
                 true,
                 now,
                 now);
     }
 
-    public static User restore(UUID id, Email email, PasswordHash passwordHash,
+    public static User restore(UUID id, Email email, Password password,
             Role role, boolean enabled, Instant createdAt, Instant updatedAt) {
         return new User(
                 validateId(id),
                 validateEmail(email),
-                validatePasswordHash(passwordHash),
+                validatePassword(password),
                 validateRole(role),
                 enabled,
                 validateTimestamp("createdAt", createdAt),
                 validateTimestamp("updatedAt", updatedAt));
     }
 
-    public void changePassword(PasswordHash newPasswordHash) {
-        this.passwordHash = validatePasswordHash(newPasswordHash);
+    public void changePassword(Password newPassword) {
+        this.password = validatePassword(newPassword);
         touch();
     }
 
@@ -86,11 +86,11 @@ public class User {
         return email;
     }
 
-    private static PasswordHash validatePasswordHash(PasswordHash passwordHash) {
-        if (passwordHash == null) {
-            throw validationError("passwordHash", "Password hash cannot be null");
+    private static Password validatePassword(Password password) {
+        if (password == null) {
+            throw validationError("password", "Password cannot be null");
         }
-        return passwordHash;
+        return password;
     }
 
     private static Role validateRole(Role role) {
@@ -121,8 +121,8 @@ public class User {
         return email;
     }
 
-    public PasswordHash getPasswordHash() {
-        return passwordHash;
+    public Password getPassword() {
+        return password;
     }
 
     public Role getRole() {

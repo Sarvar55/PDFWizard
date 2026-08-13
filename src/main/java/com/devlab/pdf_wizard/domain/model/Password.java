@@ -1,48 +1,91 @@
 package com.devlab.pdf_wizard.domain.model;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.Objects;
 
-import com.devlab.pdf_wizard.domain.exception.CommonErrorType;
-import com.devlab.pdf_wizard.domain.exception.ValidationException;
+import com.devlab.pdf_wizard.domain.exception.InvalidPasswordException;
+import com.devlab.pdf_wizard.domain.service.PasswordDomainService;
 
 public final class Password {
 
     private static final int MIN_LENGTH = 8;
     private static final int MAX_UTF8_BYTES = 72;
 
-    private final String value;
+    private final String hashedPassword;
 
-    private Password(String value) {
-        this.value = value;
+    private Password(String hashedPassword) {
+        this.hashedPassword = hashedPassword;
     }
 
-    public static Password of(String value) {
-        if (value == null || value.isBlank()) {
-            throw validationError("Password cannot be null or empty");
+    public static Password fromPlainText(
+            String plainPassword,
+            PasswordDomainService passwordDomainService) {
+        Objects.requireNonNull(
+                passwordDomainService,
+                "Password domain service cannot be null");
+
+        if (plainPassword == null) {
+            throw new InvalidPasswordException("Password cannot be null");
         }
-        if (value.length() < MIN_LENGTH) {
-            throw validationError("Password must contain at least 8 characters");
+        if (plainPassword.isBlank()) {
+            throw new InvalidPasswordException("Password cannot be blank");
         }
-        if (value.getBytes(StandardCharsets.UTF_8).length > MAX_UTF8_BYTES) {
-            throw validationError("Password cannot exceed 72 UTF-8 bytes");
+        if (plainPassword.length() < MIN_LENGTH) {
+            throw new InvalidPasswordException(
+                    "Password must be at least 8 characters");
+        }
+        if (plainPassword.getBytes(StandardCharsets.UTF_8).length > MAX_UTF8_BYTES) {
+            throw new InvalidPasswordException(
+                    "Password cannot exceed 72 UTF-8 bytes");
         }
 
-        return new Password(value);
+        return new Password(passwordDomainService.hash(plainPassword));
     }
 
-    private static ValidationException validationError(String message) {
-        return ValidationException.of(
-                CommonErrorType.VALIDATION_FAILED,
-                Map.of("password", message));
+    public boolean matches(
+            String plainPassword,
+            PasswordDomainService passwordDomainService) {
+        if (plainPassword == null) {
+            return false;
+        }
+
+        Objects.requireNonNull(
+                passwordDomainService,
+                "Password domain service cannot be null");
+
+        return passwordDomainService.matches(plainPassword, hashedPassword);
+    }
+
+    public static Password fromHashed(String hashedPassword) {
+        if (hashedPassword == null || hashedPassword.isBlank()) {
+            throw new InvalidPasswordException("Hashed password cannot be blank");
+        }
+
+        return new Password(hashedPassword);
     }
 
     public String value() {
-        return value;
+        return hashedPassword;
     }
 
     @Override
     public String toString() {
-        return "[PROTECTED]";
+        return "Password[PROTECTED]";
+    }
+
+    @Override
+    public boolean equals(Object object) {
+        if (this == object) {
+            return true;
+        }
+        if (!(object instanceof Password password)) {
+            return false;
+        }
+        return hashedPassword.equals(password.hashedPassword);
+    }
+
+    @Override
+    public int hashCode() {
+        return hashedPassword.hashCode();
     }
 }
