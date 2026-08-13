@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
+import java.io.ByteArrayInputStream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -23,6 +24,7 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 import com.devlab.pdf_wizard.application.in.CreatePdfUseCase;
 import com.devlab.pdf_wizard.application.in.DeletePdfUseCase;
+import com.devlab.pdf_wizard.application.in.DownloadPdfUseCase;
 import com.devlab.pdf_wizard.application.in.GetPdfMetadataUseCase;
 import com.devlab.pdf_wizard.application.in.MergePdfUseCase;
 import com.devlab.pdf_wizard.application.in.SplitPdfUseCase;
@@ -30,6 +32,7 @@ import com.devlab.pdf_wizard.application.in.SendPdfEmailUseCase;
 import com.devlab.pdf_wizard.application.in.command.MergePdfCommand;
 import com.devlab.pdf_wizard.application.in.command.SplitPdfCommand;
 import com.devlab.pdf_wizard.application.in.command.SendPdfEmailCommand;
+import com.devlab.pdf_wizard.application.model.PdfDownloadResult;
 import com.devlab.pdf_wizard.domain.model.ContentType;
 import com.devlab.pdf_wizard.domain.model.PdfDocument;
 
@@ -52,6 +55,11 @@ class PdfControllerTest {
                 "sarvar");
         CreatePdfUseCase createPdfUseCase = command -> document;
         GetPdfMetadataUseCase getPdfMetadataUseCase = query -> document;
+        DownloadPdfUseCase downloadPdfUseCase = query -> new PdfDownloadResult(
+                "invoice.pdf",
+                "application/pdf",
+                3,
+                new ByteArrayInputStream(new byte[] { 1, 2, 3 }));
         deletedDocumentId = new AtomicReference<>();
         DeletePdfUseCase deletePdfUseCase = command -> deletedDocumentId.set(command.id());
         mergeCommand = new AtomicReference<>();
@@ -69,12 +77,25 @@ class PdfControllerTest {
         PdfController controller = new PdfController(
                 createPdfUseCase,
                 getPdfMetadataUseCase,
+                downloadPdfUseCase,
                 deletePdfUseCase,
                 mergePdfUseCase,
                 splitPdfUseCase,
                 sendPdfEmailUseCase);
 
         mockMvc = MockMvcBuilders.standaloneSetup(controller).build();
+    }
+
+    @Test
+    @DisplayName("should download PDF content with HTTP 200")
+    void shouldDownloadPdfContentWithHttp200() throws Exception {
+        mockMvc.perform(get("/api/pdf/{id}/download", document.getId()))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Content-Type", "application/pdf"))
+                .andExpect(header().string("Content-Length", "3"))
+                .andExpect(header().string(
+                        "Content-Disposition",
+                        "attachment; filename=\"invoice.pdf\""));
     }
 
     @Test

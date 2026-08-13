@@ -20,6 +20,10 @@ public record CreatePdfRequest(
     private static final String DEFAULT_CREATOR = "system";
 
     public CreatePdfCommand toCommand() {
-        return CreatePdfCommand.of(fileName, title, data, DEFAULT_CREATOR);
+        return toCommand(DEFAULT_CREATOR);
+    }
+
+    public CreatePdfCommand toCommand(String createdBy) {
+        return CreatePdfCommand.of(fileName, title, data, createdBy);
     }
 }

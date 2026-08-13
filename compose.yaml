@@ -64,11 +64,6 @@ services:
     restart: unless-stopped
     env_file:
       - .env
-    secrets:
-      - source: postgres_password
-        target: spring.datasource.password
-      - source: minio_root_password
-        target: pdf-wizard.storage.minio.secret-key
     ports:
       - "1026:1025"
       - "8026:8025"
@@ -84,6 +79,13 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    secrets:
+      - source: postgres_password
+        target: spring.datasource.password
+      - source: minio_root_password
+        target: pdf-wizard.storage.minio.secret-key
+      - source: jwt_secret
+        target: pdf-wizard.auth.jwt.secret
     depends_on:
       postgres:
         condition: service_healthy
@@ -104,3 +106,5 @@ secrets:
     file: ./secrets/postgres_password.txt
   minio_root_password:
     file: ./secrets/minio_root_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt

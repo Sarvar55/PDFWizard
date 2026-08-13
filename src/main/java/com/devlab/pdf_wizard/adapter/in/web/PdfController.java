@@ -4,7 +4,11 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -20,6 +24,7 @@ import com.devlab.pdf_wizard.adapter.in.web.model.PdfMetadataResponse;
 import com.devlab.pdf_wizard.adapter.in.web.model.SendPdfEmailRequest;
 import com.devlab.pdf_wizard.application.in.CreatePdfUseCase;
 import com.devlab.pdf_wizard.application.in.DeletePdfUseCase;
+import com.devlab.pdf_wizard.application.in.DownloadPdfUseCase;
 import com.devlab.pdf_wizard.application.in.GetPdfMetadataUseCase;
 import com.devlab.pdf_wizard.application.in.MergePdfUseCase;
 import com.devlab.pdf_wizard.application.in.SplitPdfUseCase;
@@ -28,6 +33,9 @@ import com.devlab.pdf_wizard.application.in.command.DeletePdfCommand;
 import com.devlab.pdf_wizard.application.in.command.MergePdfCommand;
 import com.devlab.pdf_wizard.application.in.command.SplitPdfCommand;
 import com.devlab.pdf_wizard.application.in.query.GetPdfMetadataQuery;
+import com.devlab.pdf_wizard.application.in.query.DownloadPdfQuery;
+import com.devlab.pdf_wizard.application.model.AuthenticatedUser;
+import com.devlab.pdf_wizard.application.model.PdfDownloadResult;
 import com.devlab.pdf_wizard.application.model.UploadedPdf;
 import com.devlab.pdf_wizard.domain.model.PdfDocument;
 
@@ -41,6 +49,7 @@ public class PdfController {
 
     private final CreatePdfUseCase createPdfUseCase;
     private final GetPdfMetadataUseCase getPdfMetadataUseCase;
+    private final DownloadPdfUseCase downloadPdfUseCase;
     private final DeletePdfUseCase deletePdfUseCase;
     private final MergePdfUseCase mergePdfUseCase;
     private final SplitPdfUseCase splitPdfUseCase;
@@ -48,12 +57,14 @@ public class PdfController {
 
     public PdfController(CreatePdfUseCase createPdfUseCase,
             GetPdfMetadataUseCase getPdfMetadataUseCase,
+            DownloadPdfUseCase downloadPdfUseCase,
             DeletePdfUseCase deletePdfUseCase,
             MergePdfUseCase mergePdfUseCase,
             SplitPdfUseCase splitPdfUseCase,
             SendPdfEmailUseCase sendPdfEmailUseCase) {
         this.createPdfUseCase = createPdfUseCase;
         this.getPdfMetadataUseCase = getPdfMetadataUseCase;
+        this.downloadPdfUseCase = downloadPdfUseCase;
         this.deletePdfUseCase = deletePdfUseCase;
         this.mergePdfUseCase = mergePdfUseCase;
         this.splitPdfUseCase = splitPdfUseCase;
@@ -61,12 +72,28 @@ public class PdfController {
     }
 
     @PostMapping("/create")
-    public ResponseEntity<PdfMetadataResponse> create(@Valid @RequestBody CreatePdfRequest request) {
-        PdfDocument document = createPdfUseCase.execute(request.toCommand());
+    public ResponseEntity<PdfMetadataResponse> create(
+            @Valid @RequestBody CreatePdfRequest request,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
+        PdfDocument document = createPdfUseCase.execute(
+                request.toCommand(creator(authenticatedUser)));
         PdfMetadataResponse response = PdfMetadataResponse.from(document);
         URI location = URI.create("/api/pdf/" + document.getId());
 
         return ResponseEntity.created(location).body(response);
+    }
+
+    @GetMapping("/{id}/download")
+    public ResponseEntity<InputStreamResource> download(@PathVariable UUID id) {
+        PdfDownloadResult result = downloadPdfUseCase.execute(DownloadPdfQuery.of(id));
+
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(result.contentType()))
+                .contentLength(result.contentLength())
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        "attachment; filename=\"" + result.fileName().replace("\"", "") + "\"")
+                .body(new InputStreamResource(result.content()));
     }
 
     @GetMapping("/{id}")
@@ -88,14 +115,15 @@ public class PdfController {
     @PostMapping(value = "/merge", consumes = "multipart/form-data")
     public ResponseEntity<PdfMetadataResponse> merge(
             @RequestParam("outputFileName") String outputFileName,
-            @RequestParam("files") List<MultipartFile> files) {
+            @RequestParam("files") List<MultipartFile> files,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
         List<UploadedPdf> uploadedPdfs = files.stream()
                 .map(this::toUploadedPdf)
                 .toList();
         MergePdfCommand command = MergePdfCommand.of(
                 outputFileName,
                 uploadedPdfs,
-                DEFAULT_CREATOR);
+                creator(authenticatedUser));
         PdfDocument document = mergePdfUseCase.execute(command);
         PdfMetadataResponse response = PdfMetadataResponse.from(document);
         URI location = URI.create("/api/pdf/" + document.getId());
@@ -106,11 +134,12 @@ public class PdfController {
     @PostMapping(value = "/split", consumes = "multipart/form-data")
     public ResponseEntity<List<PdfMetadataResponse>> split(
             @RequestParam("outputFileNamePrefix") String outputFileNamePrefix,
-            @RequestParam("file") MultipartFile file) {
+            @RequestParam("file") MultipartFile file,
+            @AuthenticationPrincipal AuthenticatedUser authenticatedUser) {
         SplitPdfCommand command = SplitPdfCommand.of(
                 outputFileNamePrefix,
                 toUploadedPdf(file),
-                DEFAULT_CREATOR);
+                creator(authenticatedUser));
         List<PdfMetadataResponse> response = splitPdfUseCase.execute(command).stream()
                 .map(PdfMetadataResponse::from)
                 .toList();
@@ -132,5 +161,11 @@ public class PdfController {
                 file.getContentType(),
                 file.getSize(),
                 file::getInputStream);
+    }
+
+    private String creator(AuthenticatedUser authenticatedUser) {
+        return authenticatedUser == null
+                ? DEFAULT_CREATOR
+                : authenticatedUser.email().value();
     }
 }

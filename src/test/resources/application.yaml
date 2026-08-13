@@ -1,0 +1,21 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:pdfwizard;MODE=PostgreSQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  mail:
+    host: localhost
+    port: 1026
+
+pdf-wizard:
+  auth:
+    jwt:
+      secret: dGVzdC1qd3Qtc2VjcmV0LXRlc3Qtand0LXNlY3JldC0zMi1ieXRlcw==
+      issuer: pdf-wizard-test
+      access-token-ttl: 15m
+  storage:
+    minio:
+      secret-key: test-minio-secret
