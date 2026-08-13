@@ -1,64 +1,122 @@
 # PDF Wizard
 
-PDF Wizard; PDF oluşturma, birleştirme, bölme, indirme ve e-posta işlemleri sunan
-bir Spring Boot REST API'sidir. JWT, MinIO ve PostgreSQL kullanır.
+PDF Wizard is a Spring Boot REST API for processing, storing, downloading, and
+emailing PDFs with JWT authentication, PostgreSQL, and MinIO.
 
-## Özellikler
+## Main Features
 
-- BCrypt parola doğrulamalı kullanıcı kaydı ve JWT güvenliği
-- JSON verisinden PDF oluşturma, PDF birleştirme ve sayfalara bölme
-- PDF metadata görüntüleme ve dosya indirme
-- PDF'i asenkron olarak e-posta ile gönderme
-- PostgreSQL metadata persistence ve MinIO object storage
-- Mailpit ile yerel e-posta testi
-- Docker Compose ile hazır geliştirme ortamı
+- BCrypt-secured user registration and stateless JWT authorization
+- PDF generation from structured JSON data
+- Multi-file PDF merging and page-by-page splitting
+- Stream-based upload and download boundaries
+- PostgreSQL metadata persistence and MinIO object storage
+- Asynchronous PDF email dispatch with local Mailpit inspection
+- Docker Compose development environment
 
-## Teknolojiler
+## Technology Stack
 
-Java 17, Spring Boot 4.1, Spring Security, JWT, Spring Data JPA, PostgreSQL 17,
-Apache PDFBox 3, MinIO, Mailpit, Maven ve Docker Compose.
+| Area | Technology |
+| --- | --- |
+| Language | Java 17 |
+| Framework | Spring Boot 4.1, Spring MVC |
+| Security | Spring Security, BCrypt, JJWT |
+| Persistence | Spring Data JPA, Hibernate, PostgreSQL 17 |
+| PDF processing | Apache PDFBox 3 |
+| Object storage | MinIO |
+| Email | Spring Mail, Mailpit |
+| Testing | JUnit 6, AssertJ, MockMvc, H2 |
+| Build and runtime | Maven, Docker, Docker Compose |
 
-## Mimari
+## Architecture
 
-Proje hexagonal architecture yaklaşımıyla düzenlenmiştir:
+The project follows **Hexagonal Architecture**, also known as the
+**Ports and Adapters Architecture**. Business logic does not depend directly on
+Spring MVC, JPA, MinIO, JWT, PDFBox, or the mail provider.
 
 ```text
-adapter/in/web  -> application/in -> application services
-                                      |
-domain         <----------------------+
-                                      |
-adapter/out    <- application/out <---+
+                         Inbound adapters
+                    REST controllers / JWT filter
+                                |
+                                v
+                      Application input ports
+                      Commands and queries
+                                |
+                                v
+                 Application services + Domain model
+                                |
+                                v
+                      Application output ports
+                                |
+              +-----------------+------------------+
+              v                 v                  v
+          JPA adapters      MinIO adapter    PDFBox/JWT/Mail
+                         Outbound adapters
 ```
 
-- `domain`: İş kuralları, value object'ler ve domain hataları
-- `application/in`: Use-case arayüzleri ve command/query modelleri
-- `application/out`: Persistence, storage, token ve e-posta portları
-- `adapter/in`: REST controller ve JWT request filtresi
-- `adapter/out`: JPA, MinIO, PDFBox, JWT ve mail adaptörleri
-- `config`: Spring bean ve güvenlik yapılandırmaları
+### Layers
 
-## Gereksinimler
+- `domain`: Entities, value objects, roles, validation rules, and domain errors.
+- `application/in`: Use-case contracts plus command and query objects.
+- `application/out`: Technology-independent persistence, storage, token, PDF,
+  and email ports.
+- `application`: `AuthService` and `PdfService`, which coordinate use cases.
+- `adapter/in/web`: HTTP request/response models, controllers, exception mapping,
+  and JWT authentication filtering.
+- `adapter/out`: JPA repositories, MinIO storage, PDFBox processors, JWT signing,
+  BCrypt hashing, and email delivery.
+- `config`: Dependency wiring, security rules, storage, and executor setup.
 
-Docker ile çalıştırmak için:
+Application services depend on interfaces, applying Dependency Inversion and
+allowing infrastructure to change without rewriting business rules.
 
-- Docker
-- Docker Compose
+## Data Flow and Streaming
 
-Yerel olarak çalıştırmak için ayrıca:
+Uploaded files are not immediately converted into a large `byte[]`. A multipart
+upload is represented by `UploadedPdf`, which contains a lazy `PdfContentSource`.
+That functional interface opens an `InputStream` only when PDFBox needs the data.
 
-- JDK 17+
-- Maven 3.9+ veya projedeki Maven Wrapper
-- Çalışan PostgreSQL, MinIO ve SMTP servisi
+Downloads follow the same idea. `StorageService.load` returns an `InputStream`,
+`PdfDownloadResult` carries that stream, and the controller exposes it through
+Spring's `InputStreamResource`. This avoids loading a stored download entirely
+into application memory before sending it to the client.
 
-## Hızlı Başlangıç
+`byte[]` remains only at bounded transformation points for PDFBox output, MinIO
+storage, and mail attachments. Public upload/download boundaries are stream-oriented.
 
-Ortam dosyasını oluşturun:
+## Design Patterns
+
+- **Ports and Adapters:** Use-case and output interfaces isolate the core.
+- **Adapter:** JPA, MinIO, JWT, BCrypt, PDFBox, and mail classes translate external
+  APIs into application port contracts.
+- **Repository:** Spring Data repositories handle database access; persistence
+  adapters expose domain-focused load/save operations.
+- **Mapper:** `UserMapper` and `PdfDocumentMapper` keep JPA entities out of the
+  domain model.
+- **Strategy:** PDF generation, merging, splitting, token handling, storage, and
+  password hashing are selected through interfaces.
+- **Command/Query separation:** Input models express intent without coupling HTTP
+  requests directly to application services.
+- **Decorator-style resource wrapping:** `InputStreamResource` decorates an
+  `InputStream` with Spring resource behavior, while `ByteArrayResource` wraps
+  attachment data for the mail infrastructure.
+- **Factory methods and Value Objects:** Domain creation and restoration are
+  controlled through methods such as `User.register`, `User.restore`,
+  `Password.fromPlainText`, and `Email.of`.
+
+## Requirements
+
+For the containerized setup, install Docker and Docker Compose. For local Java
+execution, also install JDK 17 and Maven 3.9+, or use the included Maven Wrapper.
+
+## Quick Start with Docker
+
+Create the environment file:
 
 ```bash
 cp .env.example .env
 ```
 
-Gerekli secret dosyalarını oluşturun:
+Create the required local secret files:
 
 ```bash
 mkdir -p secrets
@@ -67,15 +125,13 @@ openssl rand -base64 24 > secrets/minio_root_password.txt
 openssl rand -base64 32 > secrets/jwt_secret.txt
 ```
 
-Tüm servisleri başlatın:
+Start the complete stack:
 
 ```bash
 docker compose --profile app up --build -d
 ```
 
-Servis adresleri:
-
-| Servis | Adres |
+| Service | Address |
 | --- | --- |
 | REST API | `http://localhost:8081` |
 | PostgreSQL | `localhost:5435` |
@@ -83,126 +139,88 @@ Servis adresleri:
 | MinIO Console | `http://localhost:9001` |
 | Mailpit UI | `http://localhost:8026` |
 
-Logları izlemek için:
-
 ```bash
 docker compose --profile app logs -f app
-```
-
-Servisleri durdurmak için:
-
-```bash
 docker compose --profile app down
 ```
 
-Volume'ları da kaldırmak isterseniz komuta `-v` ekleyin. Bu işlem saklanan
-verileri siler.
+Adding `-v` to `docker compose down` also deletes persistent volumes.
 
-## Yerel Çalıştırma
+## Local Application Execution
 
-Bağımlılık servislerini başlatın:
+Start only the infrastructure services:
 
 ```bash
 docker compose up -d postgres minio minio-init mailpit
-```
-
-Gerekli environment değerlerini tanımlayıp uygulamayı çalıştırın:
-
-```bash
 export SPRING_DATASOURCE_PASSWORD="$(tr -d '\n' < secrets/postgres_password.txt)"
 export PDF_WIZARD_STORAGE_MINIO_SECRET_KEY="$(tr -d '\n' < secrets/minio_root_password.txt)"
 export PDF_WIZARD_AUTH_JWT_SECRET="$(tr -d '\n' < secrets/jwt_secret.txt)"
 ./mvnw spring-boot:run
 ```
 
-Bu yöntemde API `http://localhost:8080` adresinde çalışır.
+The local API is available at `http://localhost:8080`.
 
-## API
+## REST API
 
-Kimlik doğrulama endpoint'leri herkese açıktır. Diğer tüm endpoint'lerde şu
-header gereklidir:
+Authentication endpoints are public. Every PDF endpoint requires:
 
 ```http
 Authorization: Bearer <access-token>
 ```
 
-| Method | Endpoint | Açıklama |
+| Method | Endpoint | Description |
 | --- | --- | --- |
-| `POST` | `/api/auth/register` | Kullanıcı oluşturur |
-| `POST` | `/api/auth/login` | Access token üretir |
-| `POST` | `/api/pdf/create` | JSON verisinden PDF oluşturur |
-| `GET` | `/api/pdf/{id}` | PDF metadata döndürür |
-| `GET` | `/api/pdf/{id}/download` | PDF dosyasını indirir |
-| `DELETE` | `/api/pdf/{id}` | PDF ve metadatasını siler |
-| `POST` | `/api/pdf/merge` | PDF dosyalarını birleştirir |
-| `POST` | `/api/pdf/split` | PDF'i sayfalara böler |
-| `POST` | `/api/pdf/send-email` | E-posta gönderimini kuyruğa alır |
+| `POST` | `/api/auth/register` | Register a user |
+| `POST` | `/api/auth/login` | Create an access token |
+| `POST` | `/api/pdf/create` | Generate and store a PDF |
+| `GET` | `/api/pdf/{id}` | Read document metadata |
+| `GET` | `/api/pdf/{id}/download` | Stream a PDF download |
+| `DELETE` | `/api/pdf/{id}` | Delete the object and metadata |
+| `POST` | `/api/pdf/merge` | Merge multipart PDF files |
+| `POST` | `/api/pdf/split` | Split a multipart PDF file |
+| `POST` | `/api/pdf/send-email` | Queue a document email |
 
-## Kullanım Örnekleri
+## Example Usage
 
-Kullanıcı kaydı:
+Register and log in:
 
 ```bash
 curl -X POST http://localhost:8081/api/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"email":"user@example.com","password":"strong-password"}'
-```
 
-Giriş:
-
-```bash
 curl -X POST http://localhost:8081/api/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"user@example.com","password":"strong-password"}'
+
+export ACCESS_TOKEN='<access-token-from-login-response>'
 ```
 
-Dönen `accessToken` değerini kullanın:
-
-```bash
-export ACCESS_TOKEN='<access-token>'
-```
-
-PDF oluşturma:
+Generate a PDF:
 
 ```bash
 curl -X POST http://localhost:8081/api/pdf/create \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{
-    "fileName":"invoice.pdf",
-    "title":"Invoice",
-    "data":{"customer":"Ada Lovelace","total":1250}
-  }'
+  -d '{"fileName":"invoice.pdf","title":"Invoice","data":{"total":1250}}'
 ```
 
-PDF birleştirme:
+Merge, split, and download:
 
 ```bash
 curl -X POST http://localhost:8081/api/pdf/merge \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -F 'outputFileName=merged.pdf' \
-  -F 'files=@first.pdf;type=application/pdf' \
-  -F 'files=@second.pdf;type=application/pdf'
-```
+  -F 'outputFileName=merged.pdf' -F 'files=@first.pdf' -F 'files=@second.pdf'
 
-PDF bölme:
-
-```bash
 curl -X POST http://localhost:8081/api/pdf/split \
   -H "Authorization: Bearer $ACCESS_TOKEN" \
-  -F 'outputFileNamePrefix=chapter' \
-  -F 'file=@document.pdf;type=application/pdf'
-```
+  -F 'outputFileNamePrefix=page' -F 'file=@document.pdf'
 
-PDF indirme:
-
-```bash
 curl http://localhost:8081/api/pdf/<document-id>/download \
-  -H "Authorization: Bearer $ACCESS_TOKEN" \
-  --output document.pdf
+  -H "Authorization: Bearer $ACCESS_TOKEN" --output document.pdf
 ```
 
-E-posta gönderme:
+Queue an email and inspect it at `http://localhost:8026`:
 
 ```bash
 curl -X POST http://localhost:8081/api/pdf/send-email \
@@ -211,40 +229,22 @@ curl -X POST http://localhost:8081/api/pdf/send-email \
   -d '{"documentId":"<document-id>","recipient":"recipient@example.com"}'
 ```
 
-## Test ve Build
-
-Testleri çalıştırın:
+## Tests and Build
 
 ```bash
 ./mvnw test
-```
-
-Uygulama paketini oluşturun:
-
-```bash
 ./mvnw clean package
 ```
 
-Oluşan JAR dosyası `target/pdf-wizard-0.0.1-SNAPSHOT.jar` altındadır.
+Tests use an in-memory H2 database and test-only JWT/storage configuration. The
+packaged application is written to `target/pdf-wizard-0.0.1-SNAPSHOT.jar`.
 
-## Yapılandırma
+## Configuration and Secrets
 
-Başlıca environment değişkenleri `.env.example` dosyasında bulunur:
+Runtime options are documented in `.env.example`. Database and MinIO passwords,
+along with the Base64-encoded JWT key, are loaded through Docker secrets. Never
+commit real secret files from the `secrets/` directory.
 
-- `SPRING_DATASOURCE_URL`
-- `SPRING_DATASOURCE_USERNAME`
-- `PDF_WIZARD_AUTH_JWT_ISSUER`
-- `PDF_WIZARD_AUTH_JWT_ACCESS_TOKEN_TTL`
-- `PDF_WIZARD_STORAGE_MINIO_ENDPOINT`
-- `PDF_WIZARD_STORAGE_MINIO_ACCESS_KEY`
-- `PDF_WIZARD_STORAGE_MINIO_BUCKET`
-- `SPRING_MAIL_HOST`
-- `SPRING_MAIL_PORT`
-- `PDF_WIZARD_MAIL_FROM`
+## License
 
-Parolalar ve JWT anahtarı repoya eklenmemeli; `secrets/` altındaki dosyalardan
-Docker secret olarak okunmalıdır.
-
-## Lisans
-
-Bu proje [MIT License](LICENSE) ile lisanslanmıştır.
+This project is available under the [MIT License](LICENSE).
