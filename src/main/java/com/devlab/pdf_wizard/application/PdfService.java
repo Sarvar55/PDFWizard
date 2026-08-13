@@ -4,6 +4,8 @@ import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.stereotype.Service;
+
 import com.devlab.pdf_wizard.application.in.CreatePdfUseCase;
 import com.devlab.pdf_wizard.application.in.DeletePdfUseCase;
 import com.devlab.pdf_wizard.application.in.DownloadPdfUseCase;
@@ -35,6 +37,7 @@ import com.devlab.pdf_wizard.domain.exception.PdfDocumentNotFoundException;
 import com.devlab.pdf_wizard.domain.model.ContentType;
 import com.devlab.pdf_wizard.domain.model.PdfDocument;
 
+@Service
 public class PdfService implements CreatePdfUseCase, GetPdfMetadataUseCase,
         DownloadPdfUseCase, DeletePdfUseCase, MergePdfUseCase, SplitPdfUseCase,
         SendPdfEmailUseCase {
