@@ -29,6 +29,11 @@ spring:
             enable: ${SPRING_MAIL_PROPERTIES_MAIL_SMTP_STARTTLS_ENABLE:false}
 
 pdf-wizard:
+  auth:
+    jwt:
+      secret: ${PDF_WIZARD_AUTH_JWT_SECRET:}
+      issuer: ${PDF_WIZARD_AUTH_JWT_ISSUER:pdf-wizard}
+      access-token-ttl: ${PDF_WIZARD_AUTH_JWT_ACCESS_TOKEN_TTL:15m}
   mail:
     from: ${PDF_WIZARD_MAIL_FROM:no-reply@pdfwizard.local}
   storage:
